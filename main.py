@@ -17,8 +17,10 @@ def download_image(url: str, base_dir: str, folder_tag: str, retry: bool = False
     out_dir = f"{base_dir}/{year}/{month}/{day}/"
     file_path = f"{out_dir}{file_name}"
     if os.path.exists(file_path):
+        print(f"::notice:: File exists: {file_path}")
         return True
     os.makedirs(out_dir, exist_ok=True)
+    print(f"::group:: Downloading image: {url}")
     try:
         if retry:
             error_message = ""
@@ -29,16 +31,19 @@ def download_image(url: str, base_dir: str, folder_tag: str, retry: bool = False
                 except (httpx.ReadTimeout, httpx.RemoteProtocolError, httpx.ConnectTimeout) as e:
                     error_message += f"```{str(e)}```\n"
             else:
-                print(f"::error title=Failed to download::{error_message}")
+                print(f"::error title=Failed to download image::{error_message}")
+                print("::endgroup::")
                 return False
         else:
             response = httpx.get(url)
     except Exception as e:
-        print(f"Error downloading {url}: {e}")
+        print(f"::error:: Error downloading {url}: {e}")
+        print("::endgroup::")
         return False
     with open(file_path, "wb") as f:
         f.write(response.content)
     updated_folders.add(folder_tag)
+    print(f"::endgroup:: Successfully downloaded: {file_path}")
     return True
 
 
