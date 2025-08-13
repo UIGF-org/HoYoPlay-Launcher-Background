@@ -112,7 +112,7 @@ def mys_wallpaper():
     for w in wallpaper_type_list:
         page_number = 1
         while True:
-            print(f"Downloading {w['name']} at page {page_number}...")
+            print(f"Fetching {w['name']} at page {page_number}...")
             this_url = api_url.format(page_number=page_number, type=w["type"])
             print(f"URL: {this_url}")
             try:
@@ -124,6 +124,11 @@ def mys_wallpaper():
                 wallpaper_url_list = [pic["url"] for pic in wallpaper["pic_list"]]
                 for url in wallpaper_url_list:
                     base_dir = f"./output/mys/{w['name']}/{wallpaper_title}"
+                    file_name, day, month, year = url_process(url)
+                    out_dir = f"{base_dir}/{year}/{month}/{day}/"
+                    target_file = f"{out_dir}{file_name}"
+                    if os.path.exists(target_file):
+                        continue
                     print(f"Downloading {w['name']}/{wallpaper_title} image...")
                     if not download_image(url, base_dir, "mys", retry=True):
                         return None
