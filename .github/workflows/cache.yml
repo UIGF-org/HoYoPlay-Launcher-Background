@@ -28,10 +28,14 @@ jobs:
         run : |
           python ${{ github.workspace }}/main.py
 
+      - name: Set Commit Message
+        id: commit_msg
+        run: echo "COMMIT_MSG=$(cat commit_msg.txt)" >> $GITHUB_ENV
+
       - name: Commit Output
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: Automated Change
+          commit_message: "${{ env.COMMIT_MSG }}"
           branch: main
           create_branch: true
           commit_options: '--no-verify --signoff'
