@@ -5,6 +5,7 @@ RESOLUTION_SET = [[1440, 3120], [1, 1], [1152, 2048]]
 RETRY_TIMES = 3
 
 updated_folders = set()
+downloaded_files = []  # Added to track newly downloaded file paths
 
 
 def url_process(url: str) -> tuple:
@@ -42,6 +43,7 @@ def download_image(url: str, base_dir: str, folder_tag: str, retry: bool = False
         return False
     with open(file_path, "wb") as f:
         f.write(response.content)
+    downloaded_files.append(file_path)  # Record newly downloaded file
     updated_folders.add(folder_tag)
     print(f"::endgroup:: Successfully downloaded: {file_path}")
     return True
@@ -205,6 +207,16 @@ def main():
     commit_message = "Update " + ",".join("`" + folder + "`" for folder in sorted(updated_folders))
     with open("commit_msg.txt", "w") as f:
         f.write(commit_message)
+
+    print("::group::Run Summary")
+    if not downloaded_files:
+        summary = "## Run Summary\n\n**No files updated.**"
+    else:
+        summary = "## Run Summary\n\n### Updated Files\n"
+        for file in downloaded_files:
+            summary += f"- {file}\n"
+    print(summary)
+    print("::endgroup::")
 
 
 if __name__ == "__main__":
