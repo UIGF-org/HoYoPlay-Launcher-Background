@@ -74,9 +74,14 @@ def get_cn_cloud():
     """Download CN cloud gaming backgrounds for multiple resolutions."""
     for height, width in RESOLUTION_SET:
         url = f"{API_BASE_CLOUD_CN}/getUIConfig?height={height}&width={width}"
-        response = httpx.get(url, timeout=30.0).json()
-        background_url = response["data"]["bg_image"]["url"]
-        download_image(background_url, "./output/cloud_cn", "cloud_cn")
+        try:
+            response = httpx.get(url, timeout=30.0)
+            response.raise_for_status()
+            data = response.json()
+            background_url = data["data"]["bg_image"]["url"]
+            download_image(background_url, "./output/cloud_cn", "cloud_cn")
+        except (httpx.HTTPError, KeyError) as e:
+            print(f"::error::Failed to fetch CN cloud background: {e}")
 
 
 def get_os_sg_cloud():
@@ -84,9 +89,14 @@ def get_os_sg_cloud():
     headers = {"x-rpc-cg_game_biz": "hk4e_global"}
     for height, width in RESOLUTION_SET:
         url = f"{API_BASE_CLOUD_SG}/getUIConfig?height={height}&width={width}"
-        response = httpx.get(url, headers=headers, timeout=30.0).json()
-        background_url = response["data"]["bg_image"]["url"]
-        download_image(background_url, "./output/cloud_sg", "cloud_sg")
+        try:
+            response = httpx.get(url, headers=headers, timeout=30.0)
+            response.raise_for_status()
+            data = response.json()
+            background_url = data["data"]["bg_image"]["url"]
+            download_image(background_url, "./output/cloud_sg", "cloud_sg")
+        except (httpx.HTTPError, KeyError) as e:
+            print(f"::error::Failed to fetch SG cloud background: {e}")
 
 
 def mys_wallpaper():
@@ -110,12 +120,14 @@ def mys_wallpaper():
             print(f"URL: {url}")
             
             try:
-                response = httpx.get(url, timeout=30.0).json()
-            except (UnicodeDecodeError, Exception) as e:
+                response = httpx.get(url, timeout=30.0)
+                response.raise_for_status()
+                data = response.json()
+            except (httpx.HTTPError, UnicodeDecodeError) as e:
                 print(f"Error fetching page {page_number}: {e}")
                 break
             
-            for wallpaper in response["data"]["wallpapers"]:
+            for wallpaper in data["data"]["wallpapers"]:
                 wallpaper_title = wallpaper["title"]
                 for pic in wallpaper["pic_list"]:
                     pic_url = pic["url"]
@@ -132,7 +144,7 @@ def mys_wallpaper():
                         print(f"::warning::Failed to download {pic_url}")
                         continue
             
-            if not response["data"]["has_more"]:
+            if not data["data"]["has_more"]:
                 break
             page_number += 1
     
@@ -151,20 +163,22 @@ def get_hoyoplay_backgrounds(api_base: str, launcher_id: str, endpoint: str,
             url += "&game_id="
         
         try:
-            response = httpx.get(url, timeout=30.0).json()
-        except Exception as e:
+            response = httpx.get(url, timeout=30.0)
+            response.raise_for_status()
+            data = response.json()
+        except httpx.HTTPError as e:
             print(f"::error::Failed to fetch {url}: {e}")
             continue
         
         if endpoint == "getGames":
-            games = response["data"]["games"]
+            games = data["data"]["games"]
             for game in games:
                 game_biz = game["biz"]
                 background_url = game["display"]["background"]["url"]
                 base_dir = os.path.join(output_dir, game_biz)
                 download_image(background_url, base_dir, folder_tag)
         else:  # getAllGameBasicInfo
-            game_info_list = response["data"]["game_info_list"]
+            game_info_list = data["data"]["game_info_list"]
             for game in game_info_list:
                 game_biz = game["game"]["biz"]
                 for bg in game["backgrounds"]:
