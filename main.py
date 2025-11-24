@@ -13,6 +13,11 @@ RESOLUTION_SET = [[1440, 3120], [1, 1], [1152, 2048]]
 RETRY_TIMES = 3
 LAUNCHER_ID_CN = "jGHBHlcOq1"
 LAUNCHER_ID_GLOBAL = "VYTpXlbWo8"
+COMMIT_MESSAGE_FILE = "commit_msg.txt"
+
+# Endpoint Constants
+ENDPOINT_GET_GAMES = "getGames"
+ENDPOINT_GET_ALL_GAME_INFO = "getAllGameBasicInfo"
 
 # Global state
 updated_folders = set()
@@ -159,7 +164,7 @@ def get_hoyoplay_backgrounds(api_base: str, launcher_id: str, endpoint: str,
     
     for language in languages:
         url = f"{api_base}/{endpoint}?launcher_id={launcher_id}&language={language}"
-        if endpoint == "getAllGameBasicInfo":
+        if endpoint == ENDPOINT_GET_ALL_GAME_INFO:
             url += "&game_id="
         
         try:
@@ -170,7 +175,7 @@ def get_hoyoplay_backgrounds(api_base: str, launcher_id: str, endpoint: str,
             print(f"::error::Failed to fetch {url}: {e}")
             continue
         
-        if endpoint == "getGames":
+        if endpoint == ENDPOINT_GET_GAMES:
             games = data["data"]["games"]
             for game in games:
                 game_biz = game["biz"]
@@ -189,19 +194,19 @@ def get_hoyoplay_backgrounds(api_base: str, launcher_id: str, endpoint: str,
 
 def get_hoyoplay_cn_pure():
     """Download CN HoYoPlay pure backgrounds (without text)."""
-    get_hoyoplay_backgrounds(API_BASE_MIHOYO, LAUNCHER_ID_CN, "getGames",
+    get_hoyoplay_backgrounds(API_BASE_MIHOYO, LAUNCHER_ID_CN, ENDPOINT_GET_GAMES,
                             "./output/hoyoplay_cn_pure", "hoyoplay_cn_pure")
 
 
 def get_hoyoplay_cn_text():
     """Download CN HoYoPlay backgrounds with text."""
-    get_hoyoplay_backgrounds(API_BASE_MIHOYO, LAUNCHER_ID_CN, "getAllGameBasicInfo",
+    get_hoyoplay_backgrounds(API_BASE_MIHOYO, LAUNCHER_ID_CN, ENDPOINT_GET_ALL_GAME_INFO,
                             "./output/hoyoplay_cn_text", "hoyoplay_cn_text")
 
 
 def get_hoyoplay_global_pure():
     """Download global HoYoPlay pure backgrounds (without text)."""
-    get_hoyoplay_backgrounds(API_BASE_HOYOVERSE, LAUNCHER_ID_GLOBAL, "getGames",
+    get_hoyoplay_backgrounds(API_BASE_HOYOVERSE, LAUNCHER_ID_GLOBAL, ENDPOINT_GET_GAMES,
                             "./output/hoyoplay_global_pure", "hoyoplay_global_pure")
 
 
@@ -209,7 +214,7 @@ def get_hoyoplay_global_text():
     """Download global HoYoPlay backgrounds with text in multiple languages."""
     languages = ["zh-cn", "zh-tw", "en-us", "ja-jp", "ko-kr", "fr-fr", 
                  "de-de", "es-es", "pt-pt", "ru-ru", "id-id", "vi-vn", "th-th"]
-    get_hoyoplay_backgrounds(API_BASE_HOYOVERSE, LAUNCHER_ID_GLOBAL, "getAllGameBasicInfo",
+    get_hoyoplay_backgrounds(API_BASE_HOYOVERSE, LAUNCHER_ID_GLOBAL, ENDPOINT_GET_ALL_GAME_INFO,
                             "./output/hoyoplay_global_text", "hoyoplay_global_text", languages)
 
 
@@ -234,7 +239,7 @@ def main():
     else:
         commit_message = "No updates"
     
-    with open("commit_msg.txt", "w", encoding="utf-8") as f:
+    with open(COMMIT_MESSAGE_FILE, "w", encoding="utf-8") as f:
         f.write(commit_message)
     
     # Print summary
