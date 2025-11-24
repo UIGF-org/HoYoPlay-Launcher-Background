@@ -1,221 +1,236 @@
 import httpx
 import os
+from typing import Optional
 
+# API Base URLs
+API_BASE_MIHOYO = "https://hyp-api.mihoyo.com/hyp/hyp-connect/api"
+API_BASE_HOYOVERSE = "https://sg-hyp-api.hoyoverse.com/hyp/hyp-connect/api"
+API_BASE_CLOUD_CN = "https://api-cloudgame.mihoyo.com/hk4e_cg_cn/gamer/api"
+API_BASE_CLOUD_SG = "https://sg-cg-api.hoyoverse.com/hk4e_global/cg/gamer/api"
+
+# Configuration Constants
 RESOLUTION_SET = [[1440, 3120], [1, 1], [1152, 2048]]
 RETRY_TIMES = 3
+LAUNCHER_ID_CN = "jGHBHlcOq1"
+LAUNCHER_ID_GLOBAL = "VYTpXlbWo8"
 
+# Global state
 updated_folders = set()
-downloaded_files = []  # Added to track newly downloaded file paths
+downloaded_files = []
 
 
-def url_process(url: str) -> tuple:
-    url = url.split("/")
-    return url[-1], url[-2], url[-3], url[-4]
+def url_process(url: str) -> tuple[str, str, str, str]:
+    """Extract file name, day, month, year from URL path."""
+    parts = url.split("/")
+    return parts[-1], parts[-2], parts[-3], parts[-4]
 
 
 def download_image(url: str, base_dir: str, folder_tag: str, retry: bool = False) -> bool:
+    """Download an image from URL and save it to the appropriate directory structure."""
     file_name, day, month, year = url_process(url)
-    out_dir = f"{base_dir}/{year}/{month}/{day}/"
-    file_path = f"{out_dir}{file_name}"
+    out_dir = os.path.join(base_dir, year, month, day)
+    file_path = os.path.join(out_dir, file_name)
+    
     if os.path.exists(file_path):
         print(f"::notice:: File exists: {file_path}")
         return True
+    
     os.makedirs(out_dir, exist_ok=True)
     print(f"::group:: Downloading image: {url}")
+    
+    response = None
     try:
         if retry:
-            error_message = ""
-            for _ in range(RETRY_TIMES):
+            error_messages = []
+            for attempt in range(RETRY_TIMES):
                 try:
-                    response = httpx.get(url)
+                    response = httpx.get(url, timeout=30.0)
+                    response.raise_for_status()
                     break
-                except (httpx.ReadTimeout, httpx.RemoteProtocolError, httpx.ConnectTimeout) as e:
-                    error_message += f"```{str(e)}```\n"
+                except (httpx.ReadTimeout, httpx.RemoteProtocolError, httpx.ConnectTimeout, httpx.HTTPStatusError) as e:
+                    error_messages.append(f"Attempt {attempt + 1}: {str(e)}")
             else:
-                print(f"::error title=Failed to download image::{error_message}")
+                print(f"::error title=Failed to download image::{'  '.join(error_messages)}")
                 print("::endgroup::")
                 return False
         else:
-            response = httpx.get(url)
+            response = httpx.get(url, timeout=30.0)
+            response.raise_for_status()
     except Exception as e:
         print(f"::error:: Error downloading {url}: {e}")
         print("::endgroup::")
         return False
+    
     with open(file_path, "wb") as f:
         f.write(response.content)
-    downloaded_files.append(file_path)  # Record newly downloaded file
+    
+    downloaded_files.append(file_path)
     updated_folders.add(folder_tag)
     print(f"::endgroup:: Successfully downloaded: {file_path}")
     return True
 
 
 def get_cn_cloud():
-    for r in RESOLUTION_SET:
-        url = "https://api-cloudgame.mihoyo.com/hk4e_cg_cn/gamer/api/getUIConfig?height=%s&width=%s" % (r[0], r[1])
-        response = httpx.get(url).json()
+    """Download CN cloud gaming backgrounds for multiple resolutions."""
+    for height, width in RESOLUTION_SET:
+        url = f"{API_BASE_CLOUD_CN}/getUIConfig?height={height}&width={width}"
+        response = httpx.get(url, timeout=30.0).json()
         background_url = response["data"]["bg_image"]["url"]
         download_image(background_url, "./output/cloud_cn", "cloud_cn")
 
 
 def get_os_sg_cloud():
-    for r in RESOLUTION_SET:
-        url = "https://sg-cg-api.hoyoverse.com/hk4e_global/cg/gamer/api/getUIConfig?height=%s&width=%s" % (r[0], r[1])
-        headers = {
-            "x-rpc-cg_game_biz": "hk4e_global",
-        }
-        response = httpx.get(url, headers=headers).json()
+    """Download Singapore cloud gaming backgrounds for multiple resolutions."""
+    headers = {"x-rpc-cg_game_biz": "hk4e_global"}
+    for height, width in RESOLUTION_SET:
+        url = f"{API_BASE_CLOUD_SG}/getUIConfig?height={height}&width={width}"
+        response = httpx.get(url, headers=headers, timeout=30.0).json()
         background_url = response["data"]["bg_image"]["url"]
         download_image(background_url, "./output/cloud_sg", "cloud_sg")
 
 
-def try_all_resolution():
-    import multiprocessing
-    import threading
-    import json
-
-    client = httpx.Client(headers={"x-rpc-cg_game_biz": "hk4e_global"})
-    background_url_list = []
-    log = open("log.txt", "w")
-
-    def process_resolution(x, y):
-        url = "https://sg-cg-api.hoyoverse.com/hk4e_global/cg/gamer/api/getUIConfig?height=%s&width=%s" % (x, y)
-        response = client.get(url).json()
-        background_url = response["data"]["bg_image"]["url"]
-        print(f"Resolution: {x}x{y}, URL: {background_url}")
-        log.write(f"Resolution: {x}x{y}, URL: {background_url}\n")
-        background_url_list.append(background_url)
-
-    num_cores = multiprocessing.cpu_count()
-    threads = []
-    for i in range(1, 3840, 10):
-        for j in range(1, 2160, 10):
-            if len(threads) >= num_cores:
-                for thread in threads:
-                    thread.join()
-                del threads[:]
-            thread = threading.Thread(target=process_resolution, args=(i, j))
-            thread.start()
-            threads.append(thread)
-
-    for thread in threads:
-        thread.join()
-
-    client.close()
-    log.close()
-    background_url_list = list(set(background_url_list))
-    with open("background_url_list.json", "w+") as f:
-        json.dump(background_url_list, f, indent=4)
-
-
 def mys_wallpaper():
+    """Download wallpapers from MiHoYo BBS (MiYouShe)."""
     print("::group::Checking MYS wallpaper")
-    api_url = ("https://hk4e-api.mihoyo.com/event/contenthub/v1/wall_papers?page={page_number}&size=100&type={type}&bad"
-               "ge_uid=100000000&badge_region=cn_qd01&game_biz=hk4e_cn&lang=zh-cn")
-    wallpaper_type_list = [
+    api_url = ("https://hk4e-api.mihoyo.com/event/contenthub/v1/wall_papers"
+               "?page={page_number}&size=100&type={type}"
+               "&badge_uid=100000000&badge_region=cn_qd01&game_biz=hk4e_cn&lang=zh-cn")
+    
+    wallpaper_types = [
         {"type": "0", "name": "Patch Wallpapers"},
         {"type": "1", "name": "Event Wallpapers"},
         {"type": "2", "name": "Character Wallpapers"},
     ]
-    for w in wallpaper_type_list:
+    
+    for wallpaper_type in wallpaper_types:
         page_number = 1
         while True:
-            print(f"Fetching {w['name']} at page {page_number}...")
-            this_url = api_url.format(page_number=page_number, type=w["type"])
-            print(f"URL: {this_url}")
+            print(f"Fetching {wallpaper_type['name']} at page {page_number}...")
+            url = api_url.format(page_number=page_number, type=wallpaper_type["type"])
+            print(f"URL: {url}")
+            
             try:
-                response = httpx.get(this_url).json()
-            except UnicodeDecodeError:
+                response = httpx.get(url, timeout=30.0).json()
+            except (UnicodeDecodeError, Exception) as e:
+                print(f"Error fetching page {page_number}: {e}")
                 break
+            
             for wallpaper in response["data"]["wallpapers"]:
                 wallpaper_title = wallpaper["title"]
-                wallpaper_url_list = [pic["url"] for pic in wallpaper["pic_list"]]
-                for url in wallpaper_url_list:
-                    base_dir = f"./output/mys/{w['name']}/{wallpaper_title}"
-                    file_name, day, month, year = url_process(url)
-                    out_dir = f"{base_dir}/{year}/{month}/{day}/"
-                    target_file = f"{out_dir}{file_name}"
+                for pic in wallpaper["pic_list"]:
+                    pic_url = pic["url"]
+                    base_dir = os.path.join("./output/mys", wallpaper_type['name'], wallpaper_title)
+                    
+                    # Check if file exists before attempting download
+                    file_name, day, month, year = url_process(pic_url)
+                    target_file = os.path.join(base_dir, year, month, day, file_name)
                     if os.path.exists(target_file):
                         continue
-                    print(f"Downloading {w['name']}/{wallpaper_title} image...")
-                    if not download_image(url, base_dir, "mys", retry=True):
-                        return None
+                    
+                    print(f"Downloading {wallpaper_type['name']}/{wallpaper_title} image...")
+                    if not download_image(pic_url, base_dir, "mys", retry=True):
+                        print(f"::warning::Failed to download {pic_url}")
+                        continue
+            
             if not response["data"]["has_more"]:
                 break
-            else:
-                page_number += 1
+            page_number += 1
+    
     print("::endgroup::")
 
 
+def get_hoyoplay_backgrounds(api_base: str, launcher_id: str, endpoint: str, 
+                            output_dir: str, folder_tag: str, languages: Optional[list[str]] = None):
+    """Generic function to download HoYoPlay backgrounds."""
+    if languages is None:
+        languages = ["zh-cn"]
+    
+    for language in languages:
+        url = f"{api_base}/{endpoint}?launcher_id={launcher_id}&language={language}"
+        if endpoint == "getAllGameBasicInfo":
+            url += "&game_id="
+        
+        try:
+            response = httpx.get(url, timeout=30.0).json()
+        except Exception as e:
+            print(f"::error::Failed to fetch {url}: {e}")
+            continue
+        
+        if endpoint == "getGames":
+            games = response["data"]["games"]
+            for game in games:
+                game_biz = game["biz"]
+                background_url = game["display"]["background"]["url"]
+                base_dir = os.path.join(output_dir, game_biz)
+                download_image(background_url, base_dir, folder_tag)
+        else:  # getAllGameBasicInfo
+            game_info_list = response["data"]["game_info_list"]
+            for game in game_info_list:
+                game_biz = game["game"]["biz"]
+                for bg in game["backgrounds"]:
+                    background_url = bg["background"]["url"]
+                    base_dir = os.path.join(output_dir, game_biz)
+                    download_image(background_url, base_dir, folder_tag)
+
+
 def get_hoyoplay_cn_pure():
-    data = httpx.get(
-        "https://hyp-api.mihoyo.com/hyp/hyp-connect/api/getGames?launcher_id=jGHBHlcOq1&language=zh-cn").json()
-    data = data["data"]["games"]
-    for game in data:
-        game_biz = game["biz"]
-        background_url = game["display"]["background"]["url"]
-        base_dir = f"./output/hoyoplay_cn_pure/{game_biz}"
-        download_image(background_url, base_dir, "hoyoplay_cn_pure")
+    """Download CN HoYoPlay pure backgrounds (without text)."""
+    get_hoyoplay_backgrounds(API_BASE_MIHOYO, LAUNCHER_ID_CN, "getGames",
+                            "./output/hoyoplay_cn_pure", "hoyoplay_cn_pure")
 
 
 def get_hoyoplay_cn_text():
-    data = httpx.get(
-        "https://hyp-api.mihoyo.com/hyp/hyp-connect/api/getAllGameBasicInfo?launcher_id=jGHBHlcOq1&language=zh-cn&game_id=").json()
-    data = data["data"]["game_info_list"]
-    for game in data:
-        game_biz = game["game"]["biz"]
-        for bg in game["backgrounds"]:
-            background_url = bg["background"]["url"]
-            base_dir = f"./output/hoyoplay_cn_text/{game_biz}"
-            download_image(background_url, base_dir, "hoyoplay_cn_text")
+    """Download CN HoYoPlay backgrounds with text."""
+    get_hoyoplay_backgrounds(API_BASE_MIHOYO, LAUNCHER_ID_CN, "getAllGameBasicInfo",
+                            "./output/hoyoplay_cn_text", "hoyoplay_cn_text")
 
 
 def get_hoyoplay_global_pure():
-    data = httpx.get(
-        "https://sg-hyp-api.hoyoverse.com/hyp/hyp-connect/api/getGames?launcher_id=VYTpXlbWo8&language=zh-cn").json()
-    data = data["data"]["games"]
-    for game in data:
-        game_biz = game["biz"]
-        background_url = game["display"]["background"]["url"]
-        base_dir = f"./output/hoyoplay_global_pure/{game_biz}"
-        download_image(background_url, base_dir, "hoyoplay_global_pure")
+    """Download global HoYoPlay pure backgrounds (without text)."""
+    get_hoyoplay_backgrounds(API_BASE_HOYOVERSE, LAUNCHER_ID_GLOBAL, "getGames",
+                            "./output/hoyoplay_global_pure", "hoyoplay_global_pure")
 
 
 def get_hoyoplay_global_text():
-    language_set = ["zh-cn", "zh-tw", "en-us", "ja-jp", "ko-kr", "fr-fr", "de-de", "es-es", "pt-pt", "ru-ru",
-                    "id-id", "vi-vn", "th-th"]
-    for language in language_set:
-        data = httpx.get(
-            f"https://sg-hyp-api.hoyoverse.com/hyp/hyp-connect/api/getAllGameBasicInfo?launcher_id=VYTpXlbWo8&language={language}").json()
-        data = data["data"]["game_info_list"]
-        for game in data:
-            game_biz = game["game"]["biz"]
-            for bg in game["backgrounds"]:
-                background_url = bg["background"]["url"]
-                base_dir = f"./output/hoyoplay_global_text/{game_biz}"
-                download_image(background_url, base_dir, "hoyoplay_global_text")
+    """Download global HoYoPlay backgrounds with text in multiple languages."""
+    languages = ["zh-cn", "zh-tw", "en-us", "ja-jp", "ko-kr", "fr-fr", 
+                 "de-de", "es-es", "pt-pt", "ru-ru", "id-id", "vi-vn", "th-th"]
+    get_hoyoplay_backgrounds(API_BASE_HOYOVERSE, LAUNCHER_ID_GLOBAL, "getAllGameBasicInfo",
+                            "./output/hoyoplay_global_text", "hoyoplay_global_text", languages)
 
 
 def main():
+    """Main function to download all background images."""
+    print("::group::Starting background image downloads")
+    
+    # Download from various sources
     get_cn_cloud()
     get_os_sg_cloud()
-    # try_all_resolution()
     mys_wallpaper()
     get_hoyoplay_cn_pure()
     get_hoyoplay_cn_text()
     get_hoyoplay_global_pure()
     get_hoyoplay_global_text()
-    commit_message = "Update " + ",".join("`" + folder + "`" for folder in sorted(updated_folders))
-    with open("commit_msg.txt", "w") as f:
+    
+    print("::endgroup::")
+    
+    # Generate commit message
+    if updated_folders:
+        commit_message = "Update " + ", ".join(f"`{folder}`" for folder in sorted(updated_folders))
+    else:
+        commit_message = "No updates"
+    
+    with open("commit_msg.txt", "w", encoding="utf-8") as f:
         f.write(commit_message)
-
+    
+    # Print summary
     print("::group::Run Summary")
     if not downloaded_files:
-        summary = "## Run Summary\n\n**No files updated.**"
+        print("## Run Summary\n\n**No files updated.**")
     else:
-        summary = "## Run Summary\n\n### Updated Files\n"
-        for file in downloaded_files:
-            summary += f"- {file}\n"
-    print(summary)
+        print("## Run Summary\n\n### Updated Files")
+        for file_path in downloaded_files:
+            print(f"- {file_path}")
     print("::endgroup::")
 
 
