@@ -11,15 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo content
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: 'Masterain98/Genshin-Impact-Launcher-Background'
           token: ${{ secrets.TOKEN }}
 
       - name: setup python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.14'
       - run: pip install -r requirements.txt
 
       - name: Generate Config
