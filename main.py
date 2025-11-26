@@ -26,8 +26,11 @@ downloaded_files = []
 
 def url_process(url: str) -> tuple[str, str, str, str]:
     """Extract file name, day, month, year from URL path."""
-    parts = url.split("/")
-    return parts[-1], parts[-2], parts[-3], parts[-4]
+    try:
+        parts = url.split("/")
+        return parts[-1], parts[-2], parts[-3], parts[-4]
+    except IndexError:
+        raise ValueError(f"Invalid URL format: {url}")
 
 
 def download_image(url: str, base_dir: str, folder_tag: str, retry: bool = False) -> bool:
@@ -187,9 +190,26 @@ def get_hoyoplay_backgrounds(api_base: str, launcher_id: str, endpoint: str,
             for game in game_info_list:
                 game_biz = game["game"]["biz"]
                 for bg in game["backgrounds"]:
+                    # Static Background
                     background_url = bg["background"]["url"]
-                    base_dir = os.path.join(output_dir, game_biz)
+                    base_dir = os.path.join(output_dir, game_biz, "background")
                     download_image(background_url, base_dir, folder_tag)
+
+                    # Animated Background
+                    animated_background_url = bg["video"]["url"]
+                    if not animated_background_url:
+                        # url may be empty string for animated background
+                        continue
+                    base_dir = os.path.join(output_dir, game_biz, "video")
+                    download_image(animated_background_url, base_dir, folder_tag)
+
+                    # Theme
+                    theme_url = bg["theme"]["url"]
+                    if not theme_url:
+                        # url may be empty string for theme
+                        continue
+                    base_dir = os.path.join(output_dir, game_biz, "theme")
+                    download_image(theme_url, base_dir, folder_tag)
 
 
 def get_hoyoplay_cn_pure():
